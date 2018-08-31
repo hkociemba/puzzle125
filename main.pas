@@ -122,6 +122,8 @@ var
   i, j, k: Integer;
   p: Point;
   base, offset, ps: Integer;
+  s: String;
+  clauses: TStringList;
 begin
   pcnt := 0;
   for i := 0 to 1 do
@@ -212,8 +214,27 @@ begin
     end;
   end;
 
- collideQ(1,842);
+  // cnf erzeugen
+  clauses := TStringList.Create;
 
+  // for each position at least one of the possible pieces is set
+  for i := 0 to 124 do
+  begin
+    s := '';
+    for j := 0 to pieceIndexOfPosMx[i] do
+      s := s + IntToStr(varname[i, j]) + ' ';
+    clauses.Add(s + '0')
+  end;
+  // now add the clauses for incompatible variables (intersecting pieces)
+
+  for i := 1 to 4800 - 1 do
+  begin
+    for j := i + 1 to 4800 do
+      if collideQ(i, j) then
+        clauses.Add('-' + IntToStr(i) + ' -' + IntToStr(j) + ' 0')
+  end;
+
+   clauses.SaveToFile('cnf.txt');
 end;
 
 end.
