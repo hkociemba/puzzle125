@@ -36,6 +36,7 @@ var
   pieceIndexOfPosMx: array [0 .. 124] of Int8;
   varnameToPieceIdx: array [1 .. 4800] of Int16;
   varname: array [0 .. 124, 0 .. 71] of Int16;
+  n_clauses: Integer;
 
 const
   p0: Piece = ((x: 0; y: 0; z: 0), (x: 1; y: 0; z: 0), (x: 2; y: 0; z: 0),
@@ -58,6 +59,7 @@ const
 
 implementation
 
+uses console;
 {$R *.dfm}
 
 function pointToPos(pt: Point): Integer;
@@ -119,11 +121,12 @@ end;
 procedure TForm1.FormCreate(Sender: TObject);
 
 var
-  i, j, k: Integer;
+  i, j, k,fix: Integer;
   p: Point;
+  pc1, pc2: Piece;
   base, offset, ps: Integer;
   s: String;
-  clauses: TStringList;
+  clauses, output, errors: TStringList;
 begin
   pcnt := 0;
   for i := 0 to 1 do
@@ -131,6 +134,9 @@ begin
       for k := 0 to 4 do
       begin
         pieces[pcnt] := translatePiece(p0, i, j, k);
+        if (i = 0) and (j = 2) and (k = 2) then
+          Memo1.Lines.Add(IntToStr(pcnt));
+        // shows that pieces with pcnt=48 or 49 must be used
         Inc(pcnt);
         pieces[pcnt] := translatePiece(p1, i, j, k);
         Inc(pcnt);
@@ -182,10 +188,19 @@ begin
   for i := 0 to 124 do
     pieceIndexOfPosMx[i] := -1;
 
+   fix:=48; // for 48, 49
+  // for each position i store the pieceIndices which are possible
   for i := 0 to 124 do
   begin
     for j := 0 to 959 do
     begin
+    //do not use pieces which intersect piece 48/49
+      if not((pieceHash[j].b[0] = pieceHash[fix].b[0]) and
+        (pieceHash[j].b[1] = pieceHash[fix].b[1])) and
+        ((pieceHash[j].b[0] and pieceHash[fix].b[0] <> 0) or
+        (pieceHash[j].b[1] and pieceHash[fix].b[1] <> 0)) then
+        continue;
+
       for k := 0 to 4 do
       begin
         if pointToPos(pieces[j, k]) = i then
@@ -216,25 +231,38 @@ begin
 
   // cnf erzeugen
   clauses := TStringList.Create;
-
+  output := TStringList.Create;
+  errors := TStringList.Create;
+  n_clauses := 0;
+  clauses.Add('c CNF file in DIMACS format');
+  clauses.Add('dummy');
+  // clauses.Strings[1]
   // for each position at least one of the possible pieces is set
   for i := 0 to 124 do
   begin
     s := '';
     for j := 0 to pieceIndexOfPosMx[i] do
       s := s + IntToStr(varname[i, j]) + ' ';
-    clauses.Add(s + '0')
+    clauses.Add(s + '0');
+    Inc(n_clauses);
   end;
-  // now add the clauses for incompatible variables (intersecting pieces)
 
+  // now add the clauses for incompatible variables (intersecting pieces)
   for i := 1 to 4800 - 1 do
   begin
     for j := i + 1 to 4800 do
       if collideQ(i, j) then
-        clauses.Add('-' + IntToStr(i) + ' -' + IntToStr(j) + ' 0')
+      begin
+        clauses.Add('-' + IntToStr(i) + ' -' + IntToStr(j) + ' 0');
+        Inc(n_clauses);
+      end;
   end;
 
-   clauses.SaveToFile('cnf.txt');
+  clauses.Strings[1] := 'p cnf ' + IntToStr(4800) + ' ' + IntToStr(n_clauses);
+  clauses.SaveToFile('cnf.txt');
+  GetConsoleOutput('java.exe -server  -jar org.sat4j.core.jar cnf.txt',
+    output, errors);
+
 end;
 
 end.

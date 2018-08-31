@@ -2,7 +2,8 @@ program puzzle125;
 
 uses
   Vcl.Forms,
-  main in 'main.pas' {Form1};
+  main in 'main.pas' {Form1},
+  console in 'console.pas';
 
 {$R *.res}
 
