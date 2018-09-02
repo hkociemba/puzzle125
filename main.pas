@@ -11,6 +11,7 @@ type
   TForm1 = class(TForm)
     Memo1: TMemo;
     Button1: TButton;
+    CheckFromScratch: TCheckBox;
     procedure FormCreate(Sender: TObject);
     procedure Button1Click(Sender: TObject);
   private
@@ -65,6 +66,35 @@ implementation
 uses console, StrUtils;
 {$R *.dfm}
 
+// check if "spike" piece[4] is in correct position at the "body" piece[0]-piece[3]
+function validQ(p: Piece): Boolean;
+var
+  i: Integer;
+begin
+  if p[0].x <> p[1].x then // body orientated in x-direction
+  begin
+    if (p[4].x <> p[1].x) and (p[4].x <> p[2].x) then
+      Exit(false);
+    if Abs(p[4].y - p[1].y) + Abs(p[4].z - p[1].z) <> 1 then
+      Exit(false);
+  end
+  else if p[0].y <> p[1].y then // body orientated in y-direction
+  begin
+    if (p[4].y <> p[1].y) and (p[4].y <> p[2].y) then
+      Exit(false);
+    if Abs(p[4].z - p[1].z) + Abs(p[4].x - p[1].x) <> 1 then
+      Exit(false);
+  end
+  else // body in z-direction
+  begin
+    if (p[4].z <> p[1].z) and (p[4].z <> p[2].z) then
+      Exit(false);
+    if Abs(p[4].x - p[1].x) + Abs(p[4].y - p[1].y) <> 1 then
+      Exit(false);
+  end;
+  Result := true;
+end;
+
 function printPiece(n: Integer): String;
 var
   pc: Piece;
@@ -72,15 +102,17 @@ var
   s: String;
   i: Integer;
 begin
-  s:='';
+  s := '';
   pc := pieces[n];
   for i := 0 to 4 do
   begin
-   pt:=pc[i];
-   s:=s+'('+IntToStr(pt.x)+','+IntToStr(pt.y)+','+IntToStr(pt.z)+')';
-   if i<>4 then s:=s+',';
+    pt := pc[i];
+    s := s + '(' + IntToStr(pt.x) + ',' + IntToStr(pt.y) + ',' +
+      IntToStr(pt.z) + ')';
+    if i <> 4 then
+      s := s + ',';
   end;
-  Result:=s;
+  Result := s;
 end;
 
 function pointToPos(pt: Point): Integer;
@@ -135,6 +167,44 @@ begin
     Exit(false); // Identical pieces do not collide
   if (pieceHash[pidx1].b[0] and pieceHash[pidx2].b[0] = 0) and
     (pieceHash[pidx1].b[1] and pieceHash[pidx2].b[1] = 0) then
+    Exit(false);
+  Result := true;
+end;
+
+// weak collision: the exchange of the spikes gives valid pieces but the
+// position have wrong order
+function weakCollideQ(n1, n2: Int16): Boolean;
+var
+  pidx1, pidx2: Int16;
+  pc1, pc2, pc1xc, pc2xc: Piece;
+  i: Integer;
+begin
+
+  if collideQ(n1, n2) then
+    Exit(false); // colliding pieces do not weakCollide
+
+  pidx1 := varnameToPieceIdx[n1];
+  pidx2 := varnameToPieceIdx[n2];
+  if pidx1 = pidx2 then
+    Exit(false);//Identical pieces do not weakCollide
+
+  pc1 := pieces[pidx1];
+  pc2 := pieces[pidx2];
+  for i := 0 to 3 do // copy body
+  begin
+    pc1xc[i] := pc1[i];
+    pc2xc[i] := pc2[i];
+  end;
+  pc1xc[4] := pc2[4]; // exchange peaks
+  pc2xc[4] := pc1[4];
+
+  if not validQ(pc1xc) or not validQ(pc2xc) then
+    Exit(false);
+  if (pointToPos(pc1[0]) < pointToPos(pc2[0])) and
+    (pointToPos(pc1[4]) < pointToPos(pc2[4])) then
+    Exit(false);
+  if (pointToPos(pc1[0]) > pointToPos(pc2[0])) and
+    (pointToPos(pc1[4]) > pointToPos(pc2[4])) then
     Exit(false);
   Result := true;
 end;
@@ -217,7 +287,7 @@ begin
   for i := 0 to 124 do
     pieceIndexOfPosMx[i] := -1;
 
-  fix := 48; // for 48, 49
+  fix := 49; // for 48, 49
   // for each position i store the pieceIndices which are possible
   for i := 0 to 124 do
   begin
@@ -257,83 +327,55 @@ begin
     end;
   end;
 
-  // cnf erzeugen
   clauses := TSTringList.Create;
 
-  n_clauses := 0;
-  clauses.Add('c CNF file in DIMACS format');
-  clauses.Add('dummy');
-  // clauses.Strings[1]
-  // for each position at least one of the possible pieces is set
-  for i := 0 to 124 do
+  if CheckFromScratch.Checked then
   begin
-    s := '';
-    for j := 0 to pieceIndexOfPosMx[i] do
-      s := s + IntToStr(varname[i, j]) + ' ';
-    clauses.Add(s + '0');
-    Inc(n_clauses);
-  end;
+    // cnf erzeugen
+    n_clauses := 0;
+    clauses.Add('c CNF file in DIMACS format');
+    clauses.Add('dummy');
+    // clauses.Strings[1]
+    // for each position at least one of the possible pieces is set
+    for i := 0 to 124 do
+    begin
+      s := '';
+      for j := 0 to pieceIndexOfPosMx[i] do
+        s := s + IntToStr(varname[i, j]) + ' ';
+      clauses.Add(s + '0');
+      Inc(n_clauses);
+    end;
 
-  // now add the clauses for incompatible variables (intersecting pieces)
-  for i := 1 to 4800 - 1 do
+    // set up the clauses for weak collisions
+    for i := 1 to 4800 - 1 do
+    begin
+      for j := i + 1 to 4800 do
+        if weakCollideQ(i, j) then
+        begin
+          clauses.Add('-' + IntToStr(i) + ' -' + IntToStr(j) + ' 0');
+          Inc(n_clauses);
+        end;
+    end;
+
+    // now add the clauses for collisions (intersecting pieces)
+    for i := 1 to 4800 - 1 do
+    begin
+      for j := i + 1 to 4800 do
+        if collideQ(i, j) then
+        begin
+          clauses.Add('-' + IntToStr(i) + ' -' + IntToStr(j) + ' 0');
+          Inc(n_clauses);
+        end;
+    end;
+
+    clauses.Strings[1] := 'p cnf ' + IntToStr(4800) + ' ' + IntToStr(n_clauses);
+    clauses.SaveToFile('cnf.txt'); // Initial cnf file
+  end
+  else
   begin
-    for j := i + 1 to 4800 do
-      if collideQ(i, j) then
-      begin
-        clauses.Add('-' + IntToStr(i) + ' -' + IntToStr(j) + ' 0');
-        Inc(n_clauses);
-      end;
+    clauses.LoadFromFile('cnf.txt');
+    n_clauses := clauses.Count - 2;
   end;
-
-  clauses.Strings[1] := 'p cnf ' + IntToStr(4800) + ' ' + IntToStr(n_clauses);
-  clauses.SaveToFile('cnf.txt'); // Initial cnf file
-  // run SAT solver, loop until no more solutions
-  // repeat
-  // GetConsoleOutput('java.exe -server  -jar org.sat4j.core.jar cnf.txt',
-  // output, errors);
-  //
-  // solution_raw := '';
-  // for i := 0 to output.Count - 1 do
-  // begin
-  // s := output.Strings[i];
-  // if s[1] = 's' then
-  // begin
-  // if ContainsText(s, 'UNSATISFIABLE') then
-  // begin
-  // Memo1.Lines.Add('No more solutions');
-  // Exit;
-  // end;
-  // end;
-  //
-  // if (s[1] = 'c') and ContainsText(s, 'Total wall clock time') then
-  // Memo1.Lines.Add(copy(s, 3, Length(s)));
-  //
-  // if s[1] = 'v' then
-  // begin
-  // solution_raw := solution_raw + copy(s, 3, Length(s));
-  // break;
-  // end;
-  // end;
-  // solution_split := custom_split(solution_raw);
-  // s := '';
-  // for i := 0 to Length(solution_split) - 1 do
-  // try
-  // n := StrToInt(solution_split[i]);
-  // if n > 0 then
-  // begin
-  // s := s + IntToStr(varnameToPieceIdx[n]) + ' ';
-  // end;
-  // except
-  // on EConvertError do
-  // end;
-  // Memo1.Lines.Add(s);
-  // Application.ProcessMessages;
-  //
-  // clauses.Add(solution_raw);
-  // Inc(n_clauses);
-  // clauses.Strings[1] := 'p cnf ' + IntToStr(4800) + ' ' + IntToStr(n_clauses);
-  // clauses.SaveToFile('cnf.txt');
-  // until false;
 end;
 
 procedure TForm1.Button1Click(Sender: TObject);
@@ -376,6 +418,7 @@ begin
     for i := 0 to 959 do
       used[i] := false;
 
+    Memo1.Lines.Add(IntToStr(cnt + 1));
     for i := 0 to Length(solution_split) - 1 do
       try
         n := StrToInt(solution_split[i]);
@@ -384,8 +427,8 @@ begin
           if not used[varnameToPieceIdx[n]] then
           begin
             used[varnameToPieceIdx[n]] := true;
-            //s := s + IntToStr(varnameToPieceIdx[n]) + ' ';
-            //s:=s+ printPiece(varnameToPieceIdx[n]);
+            // s := s + IntToStr(varnameToPieceIdx[n]) + ' ';
+            // s:=s+ printPiece(varnameToPieceIdx[n]);
             Memo1.Lines.Add(printPiece(varnameToPieceIdx[n]));
           end;
           negated := negated + '-' + IntToStr(n) + ' ';
@@ -393,8 +436,8 @@ begin
       except
         on EConvertError do
       end;
-    //Memo1.Lines.Add(s);
-     Memo1.Lines.Add('');
+    // Memo1.Lines.Add(s);
+    Memo1.Lines.Add('');
     negated := negated + '0';
     Application.ProcessMessages;
 
@@ -403,7 +446,10 @@ begin
     clauses.Strings[1] := 'p cnf ' + IntToStr(4800) + ' ' + IntToStr(n_clauses);
     clauses.SaveToFile('cnf.txt');
     Inc(cnt);
-  until cnt = 100;
+    if cnt mod 1 = 0 then
+      Memo1.Lines.SaveToFile('solutions.txt');
+
+  until false;
 
 end;
 

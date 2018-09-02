@@ -30,7 +30,7 @@ object Form1: TForm1
     ExplicitHeight = 281
   end
   object Button1: TButton
-    Left = 216
+    Left = 136
     Top = 616
     Width = 121
     Height = 25
@@ -38,6 +38,15 @@ object Form1: TForm1
     Caption = 'Compute Solutions'
     TabOrder = 1
     OnClick = Button1Click
-    ExplicitTop = 309
+  end
+  object CheckFromScratch: TCheckBox
+    Left = 304
+    Top = 620
+    Width = 97
+    Height = 17
+    Caption = 'From Scratch'
+    Checked = True
+    State = cbChecked
+    TabOrder = 2
   end
 end
