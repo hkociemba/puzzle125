@@ -10,10 +10,9 @@ uses
 type
   TForm1 = class(TForm)
     Memo1: TMemo;
-    Button1: TButton;
-    CheckFromScratch: TCheckBox;
+    BRun: TButton;
     procedure FormCreate(Sender: TObject);
-    procedure Button1Click(Sender: TObject);
+    procedure BRunClick(Sender: TObject);
   private
     { Private-Deklarationen }
   public
@@ -67,7 +66,7 @@ uses console, StrUtils;
 {$R *.dfm}
 
 // check if "spike" piece[4] is in correct position at the "body" piece[0]-piece[3]
-function validQ(p: Piece): Boolean;
+function spikeValidQ(p: Piece): Boolean;
 var
   i: Integer;
 begin
@@ -186,7 +185,7 @@ begin
   pidx1 := varnameToPieceIdx[n1];
   pidx2 := varnameToPieceIdx[n2];
   if pidx1 = pidx2 then
-    Exit(false);//Identical pieces do not weakCollide
+    Exit(false); // Identical pieces do not weakCollide
 
   pc1 := pieces[pidx1];
   pc2 := pieces[pidx2];
@@ -198,13 +197,7 @@ begin
   pc1xc[4] := pc2[4]; // exchange peaks
   pc2xc[4] := pc1[4];
 
-  if not validQ(pc1xc) or not validQ(pc2xc) then
-    Exit(false);
-  if (pointToPos(pc1[0]) < pointToPos(pc2[0])) and
-    (pointToPos(pc1[4]) < pointToPos(pc2[4])) then
-    Exit(false);
-  if (pointToPos(pc1[0]) > pointToPos(pc2[0])) and
-    (pointToPos(pc1[4]) > pointToPos(pc2[4])) then
+  if not spikeValidQ(pc1xc) or not spikeValidQ(pc2xc) then
     Exit(false);
   Result := true;
 end;
@@ -235,9 +228,12 @@ begin
         pieces[pcnt] := translatePiece(p0, i, j, k);
         if (i = 0) and (j = 2) and (k = 2) then
           Memo1.Lines.Add(IntToStr(pcnt));
-        // shows that pieces with pcnt=48 or 49 must be used
+        // shows which pieces are fixed candidates for symmetry reasons
         Inc(pcnt);
         pieces[pcnt] := translatePiece(p1, i, j, k);
+        if (i = 0) and (j = 2) and (k = 2) then
+          Memo1.Lines.Add(IntToStr(pcnt));
+        // shows which pieces are fixed candidates for symmetry reasons
         Inc(pcnt);
         pieces[pcnt] := translatePiece(p2, i, j, k);
         Inc(pcnt);
@@ -252,6 +248,9 @@ begin
         pieces[pcnt] := translatePiece(p4, i, j, k);
         Inc(pcnt);
         pieces[pcnt] := translatePiece(p5, i, j, k);
+        if (i = 0) and (j = 2) and (k = 1) then
+          Memo1.Lines.Add(IntToStr(pcnt));
+        // shows which pieces are fixed candidates for symmetry reasons
         Inc(pcnt);
         pieces[pcnt] := translatePiece(p6, i, j, k);
         Inc(pcnt);
@@ -287,13 +286,14 @@ begin
   for i := 0 to 124 do
     pieceIndexOfPosMx[i] := -1;
 
-  fix := 49; // for 48, 49
+  fix := 197; // run the program for values 48, 49 and 197 to cover all cases
+  // up to rotational symmetry
   // for each position i store the pieceIndices which are possible
   for i := 0 to 124 do
   begin
     for j := 0 to 959 do
     begin
-      // do not use pieces which intersect piece 48/49
+      // do not use pieces which intersect piece 48/49/197
       if not((pieceHash[j].b[0] = pieceHash[fix].b[0]) and
         (pieceHash[j].b[1] = pieceHash[fix].b[1])) and
         ((pieceHash[j].b[0] and pieceHash[fix].b[0] <> 0) or
@@ -321,7 +321,7 @@ begin
     begin
       if j > pieceIndexOfPosMx[i] then
         break;
-      varname[i, j] := k;
+      varname[i, j] := k; // varname for cell i and the j. possible piece
       varnameToPieceIdx[k] := pieceIndexOfPos[i, j];
       Inc(k);
     end;
@@ -329,56 +329,48 @@ begin
 
   clauses := TSTringList.Create;
 
-  if CheckFromScratch.Checked then
+  // cnf erzeugen
+  n_clauses := 0;
+  clauses.Add('c CNF file in DIMACS format');
+  clauses.Add('dummy');
+  // for each position at least one of the possible pieces is set
+  for i := 0 to 124 do
   begin
-    // cnf erzeugen
-    n_clauses := 0;
-    clauses.Add('c CNF file in DIMACS format');
-    clauses.Add('dummy');
-    // clauses.Strings[1]
-    // for each position at least one of the possible pieces is set
-    for i := 0 to 124 do
-    begin
-      s := '';
-      for j := 0 to pieceIndexOfPosMx[i] do
-        s := s + IntToStr(varname[i, j]) + ' ';
-      clauses.Add(s + '0');
-      Inc(n_clauses);
-    end;
-
-    // set up the clauses for weak collisions
-    for i := 1 to 4800 - 1 do
-    begin
-      for j := i + 1 to 4800 do
-        if weakCollideQ(i, j) then
-        begin
-          clauses.Add('-' + IntToStr(i) + ' -' + IntToStr(j) + ' 0');
-          Inc(n_clauses);
-        end;
-    end;
-
-    // now add the clauses for collisions (intersecting pieces)
-    for i := 1 to 4800 - 1 do
-    begin
-      for j := i + 1 to 4800 do
-        if collideQ(i, j) then
-        begin
-          clauses.Add('-' + IntToStr(i) + ' -' + IntToStr(j) + ' 0');
-          Inc(n_clauses);
-        end;
-    end;
-
-    clauses.Strings[1] := 'p cnf ' + IntToStr(4800) + ' ' + IntToStr(n_clauses);
-    clauses.SaveToFile('cnf.txt'); // Initial cnf file
-  end
-  else
-  begin
-    clauses.LoadFromFile('cnf.txt');
-    n_clauses := clauses.Count - 2;
+    s := '';
+    for j := 0 to pieceIndexOfPosMx[i] do
+      s := s + IntToStr(varname[i, j]) + ' ';
+    clauses.Add(s + '0');
+    Inc(n_clauses);
   end;
+
+  // set up the clauses for weak collisions
+  for i := 1 to 4800 - 1 do
+  begin
+    for j := i + 1 to 4800 do
+      if weakCollideQ(i, j) then
+      begin
+        clauses.Add('-' + IntToStr(i) + ' -' + IntToStr(j) + ' 0');
+        Inc(n_clauses);
+      end;
+  end;
+
+  // now add the clauses for collisions (intersecting pieces)
+  for i := 1 to 4800 - 1 do
+  begin
+    for j := i + 1 to 4800 do
+      if collideQ(i, j) then
+      begin
+        clauses.Add('-' + IntToStr(i) + ' -' + IntToStr(j) + ' 0');
+        Inc(n_clauses);
+      end;
+  end;
+
+  clauses.Strings[1] := 'p cnf ' + IntToStr(4800) + ' ' + IntToStr(n_clauses);
+  clauses.SaveToFile('cnf.txt'); // Initial cnf file
+
 end;
 
-procedure TForm1.Button1Click(Sender: TObject);
+procedure TForm1.BRunClick(Sender: TObject);
 var
   i, n, cnt: Integer;
   s, solution_raw, negated: String;
@@ -427,8 +419,6 @@ begin
           if not used[varnameToPieceIdx[n]] then
           begin
             used[varnameToPieceIdx[n]] := true;
-            // s := s + IntToStr(varnameToPieceIdx[n]) + ' ';
-            // s:=s+ printPiece(varnameToPieceIdx[n]);
             Memo1.Lines.Add(printPiece(varnameToPieceIdx[n]));
           end;
           negated := negated + '-' + IntToStr(n) + ' ';
@@ -436,7 +426,6 @@ begin
       except
         on EConvertError do
       end;
-    // Memo1.Lines.Add(s);
     Memo1.Lines.Add('');
     negated := negated + '0';
     Application.ProcessMessages;

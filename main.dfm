@@ -23,30 +23,17 @@ object Form1: TForm1
     Width = 529
     Height = 585
     Anchors = [akLeft, akTop, akRight, akBottom]
-    Lines.Strings = (
-      'Memo1')
     ScrollBars = ssBoth
     TabOrder = 0
-    ExplicitHeight = 281
   end
-  object Button1: TButton
-    Left = 136
+  object BRun: TButton
+    Left = 192
     Top = 616
     Width = 121
     Height = 25
     Anchors = [akBottom]
     Caption = 'Compute Solutions'
     TabOrder = 1
-    OnClick = Button1Click
-  end
-  object CheckFromScratch: TCheckBox
-    Left = 304
-    Top = 620
-    Width = 97
-    Height = 17
-    Caption = 'From Scratch'
-    Checked = True
-    State = cbChecked
-    TabOrder = 2
+    OnClick = BRunClick
   end
 end
