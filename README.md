@@ -1,3 +1,3 @@
 # puzzle125
 
-Work in progress....
+See http://kociemba.org/themen/125puzzle/
