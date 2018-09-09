@@ -20,7 +20,7 @@ type
   end;
 
   Point = record
-    x, y, z: Byte; // try Integer also
+    x, y, z: Int8;
   end;
 
   Piece = array [0 .. 4] of Point;
@@ -40,25 +40,18 @@ var
   varname: array [0 .. 124, 0 .. 71] of Int16;
   n_clauses: Integer;
   clauses: TSTringList;
+  p1, p2, p3, p4, p5, p6, p7: Piece;
 
 const
-  p0: Piece = ((x: 0; y: 0; z: 0), (x: 1; y: 0; z: 0), (x: 2; y: 0; z: 0),
+  //comment out one of the following definitions
+  //N-pentomino
+  p0: Piece = ((x: 0; y: 1; z: 0), (x: 1; y: 0; z: 0), (x: 2; y: 0; z: 0),
     (x: 3; y: 0; z: 0), (x: 1; y: 1; z: 0));
-  p1: Piece = ((x: 0; y: 0; z: 0), (x: 1; y: 0; z: 0), (x: 2; y: 0; z: 0),
-    (x: 3; y: 0; z: 0), (x: 2; y: 1; z: 0));
-  p2: Piece = ((x: 0; y: 1; z: 0), (x: 1; y: 1; z: 0), (x: 2; y: 1; z: 0),
-    (x: 3; y: 1; z: 0), (x: 1; y: 0; z: 0));
-  p3: Piece = ((x: 0; y: 1; z: 0), (x: 1; y: 1; z: 0), (x: 2; y: 1; z: 0),
-    (x: 3; y: 1; z: 0), (x: 2; y: 0; z: 0));
 
-  p4: Piece = ((x: 0; y: 0; z: 0), (x: 1; y: 0; z: 0), (x: 2; y: 0; z: 0),
-    (x: 3; y: 0; z: 0), (x: 1; y: 0; z: 1));
-  p5: Piece = ((x: 0; y: 0; z: 0), (x: 1; y: 0; z: 0), (x: 2; y: 0; z: 0),
-    (x: 3; y: 0; z: 0), (x: 2; y: 0; z: 1));
-  p6: Piece = ((x: 0; y: 0; z: 1), (x: 1; y: 0; z: 1), (x: 2; y: 0; z: 1),
-    (x: 3; y: 0; z: 1), (x: 1; y: 0; z: 0));
-  p7: Piece = ((x: 0; y: 0; z: 1), (x: 1; y: 0; z: 1), (x: 2; y: 0; z: 1),
-    (x: 3; y: 0; z: 1), (x: 2; y: 0; z: 0));
+  //Y-pentomino
+//   p0: Piece = ((x: 0; y: 1; z: 0), (x: 1; y: 0; z: 0), (x: 2; y: 0; z: 0),
+//    (x: 3; y: 0; z: 0), (x: 1; y: 1; z: 0))
+
 
 implementation
 
@@ -67,8 +60,6 @@ uses console, StrUtils;
 
 // check if "spike" piece[4] is in correct position at the "body" piece[0]-piece[3]
 function spikeValidQ(p: Piece): Boolean;
-var
-  i: Integer;
 begin
   if p[0].x <> p[1].x then // body orientated in x-direction
   begin
@@ -155,6 +146,52 @@ begin
   end;
 end;
 
+function rotateX4Piece(pc: Piece): Piece;
+var
+  i, miny, minz: Integer;
+begin
+  for i := 0 to 4 do
+  begin
+    Result[i].x := pc[i].x;
+    Result[i].y := -pc[i].z;
+    Result[i].z := pc[i].y;
+  end;
+  // piece must touch xy- and xz-plane
+  miny := MAXINT;
+  minz := MAXINT;
+  for i := 0 to 4 do
+  begin
+    if Result[i].y < miny then
+      miny := Result[i].y;
+    if Result[i].z < minz then
+      minz := Result[i].z;
+  end;
+  Result := translatePiece(Result, 0, -miny, -minz)
+end;
+
+function rotateZ2Piece(pc: Piece): Piece;
+var
+  i, minx, miny: Integer;
+begin
+  for i := 0 to 4 do
+  begin
+    Result[i].x := -pc[i].x;
+    Result[i].y := -pc[i].y;
+    Result[i].z := pc[i].z;
+  end;
+  // piece must touch xy- and xz-plane
+  minx := MAXINT;
+  miny := MAXINT;
+  for i := 0 to 4 do
+  begin
+    if Result[i].x < minx then
+      minx := Result[i].x;
+    if Result[i].y < miny then
+      miny := Result[i].y;
+  end;
+  Result := translatePiece(Result, -minx, -miny, 0)
+end;
+
 function collideQ(n1, n2: Int16): Boolean;
 var
   pidx1, pidx2: Int16;
@@ -214,12 +251,20 @@ end;
 procedure TForm1.FormCreate(Sender: TObject);
 
 var
-  i, j, k, n, fix: Integer;
+  i, j, k, fix: Integer;
   p: Point;
-  pc1, pc2: Piece;
   base, offset, ps: Integer;
   s: String;
 begin
+  p4 := rotateX4Piece(p0);
+  p2 := rotateX4Piece(p4);
+  p6 := rotateX4Piece(p2);
+
+  p3 := rotateZ2Piece(p0);
+  p7 := rotateX4Piece(p3);
+  p1 := rotateX4Piece(p7);
+  p5 := rotateX4Piece(p1);
+
   pcnt := 0;
   for i := 0 to 1 do
     for j := 0 to 3 do
@@ -294,11 +339,13 @@ begin
     for j := 0 to 959 do
     begin
       // do not use pieces which intersect piece 48/49/197
+
       if not((pieceHash[j].b[0] = pieceHash[fix].b[0]) and
         (pieceHash[j].b[1] = pieceHash[fix].b[1])) and
         ((pieceHash[j].b[0] and pieceHash[fix].b[0] <> 0) or
         (pieceHash[j].b[1] and pieceHash[fix].b[1] <> 0)) then
         continue;
+
       for k := 0 to 4 do
       begin
         if pointToPos(pieces[j, k]) = i then
@@ -344,15 +391,15 @@ begin
   end;
 
   // set up the clauses for weak collisions
-  for i := 1 to 4800 - 1 do
-  begin
-    for j := i + 1 to 4800 do
-      if weakCollideQ(i, j) then
-      begin
-        clauses.Add('-' + IntToStr(i) + ' -' + IntToStr(j) + ' 0');
-        Inc(n_clauses);
-      end;
-  end;
+  // for i := 1 to 4800 - 1 do
+  // begin
+  // for j := i + 1 to 4800 do
+  // if weakCollideQ(i, j) then
+  // begin
+  // clauses.Add('-' + IntToStr(i) + ' -' + IntToStr(j) + ' 0');
+  // Inc(n_clauses);
+  // end;
+  // end;
 
   // now add the clauses for collisions (intersecting pieces)
   for i := 1 to 4800 - 1 do
