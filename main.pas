@@ -43,15 +43,14 @@ var
   p1, p2, p3, p4, p5, p6, p7: Piece;
 
 const
-  //comment out one of the following definitions
-  //N-pentomino
+  // comment out one of the following definitions
+  // N-pentomino
+  // p0: Piece = ((x: 0; y: 1; z: 0), (x: 1; y: 0; z: 0), (x: 2; y: 0; z: 0),
+  // (x: 3; y: 0; z: 0), (x: 1; y: 1; z: 0));
+
+  // Y-pentomino
   p0: Piece = ((x: 0; y: 1; z: 0), (x: 1; y: 0; z: 0), (x: 2; y: 0; z: 0),
     (x: 3; y: 0; z: 0), (x: 1; y: 1; z: 0));
-
-  //Y-pentomino
-//   p0: Piece = ((x: 0; y: 1; z: 0), (x: 1; y: 0; z: 0), (x: 2; y: 0; z: 0),
-//    (x: 3; y: 0; z: 0), (x: 1; y: 1; z: 0))
-
 
 implementation
 
@@ -484,6 +483,7 @@ begin
     Inc(cnt);
     if cnt mod 1 = 0 then
       Memo1.Lines.SaveToFile('solutions.txt');
+    // you can use the Mathematica file display.nb to display the result
 
   until false;
 
